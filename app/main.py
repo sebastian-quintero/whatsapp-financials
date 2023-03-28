@@ -1,3 +1,8 @@
+"""
+main module is the application entry point. This module contains the FastAPI
+web server and the definition of the endpoints.
+"""
+
 from fastapi import FastAPI, Form, Response, status
 from twilio.twiml.messaging_response import MessagingResponse
 
@@ -23,7 +28,11 @@ def health_check() -> str:
 
 
 @server.post("/twilio", status_code=status.HTTP_202_ACCEPTED)
-def twilio(response: Response, From: str = Form(), Body: str = Form()) -> str:
+def twilio(
+    response: Response,
+    From: str = Form(),  # pylint: disable=invalid-name
+    Body: str = Form(),  # pylint: disable=invalid-name
+) -> str:
     """
     Interact with the Twilio WhatsApp API. This endpoint is the callback that
     must be specified in the console. It receives a request and must respond in

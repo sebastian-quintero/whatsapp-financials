@@ -1,3 +1,6 @@
+"""database module contains all the database related code for the application,
+such as logic for writing to the database and reading from it."""
+
 from enum import Enum
 import logging
 import os
@@ -12,11 +15,10 @@ load_dotenv()
 
 # Initializes the database engine. Use env vars to pass private info.
 ENGINE = create_engine(
-    "mysql+mysqlconnector://{user}:{password}@{host}:{port}/main".format(
-        user=os.getenv("DDBB_USER"),
-        password=os.getenv("DDBB_PASSWORD"),
-        host=os.getenv("DDBB_HOST"),
-        port=os.getenv("DDBB_PORT"),
+    (
+        f"mysql+mysqlconnector://"
+        f"{os.getenv('DDBB_USER')}:{os.getenv('DDBB_PASSWORD')}"
+        f"@{os.getenv('DDBB_HOST')}:{os.getenv('DDBB_PORT')}/main"
     ),
     echo=False,
 )
@@ -27,18 +29,18 @@ class Language(str, Enum):
     application."""
 
     # Spanish.
-    es = "ES"
+    ES = "ES"
     # English.
-    en = "EN"
+    EN = "EN"
 
 
 class Currency(str, Enum):
     """Currency defines all the possible currencies supported by the
     application."""
 
-    cop = "COP"
-    usd = "USD"
-    eur = "EUR"
+    COP = "COP"
+    USD = "USD"
+    EUR = "EUR"
 
 
 class Organization(SQLModel, table=True):
@@ -75,27 +77,19 @@ class Transaction(SQLModel, table=True):
     description: str
 
 
-def record_transaction(
-    created_at: datetime,
-    description: str,
-    label: str,
-    value: float,
-    currency: str,
-    value_converted: float,
-    user: User,
-):
+def record_transaction(transaction: Transaction):
     """Record a transaction to the transaction table."""
 
-    transaction = Transaction(
-        created_at=created_at,
-        user_id=user.id,
-        label=label,
-        value=value,
-        currency=currency,
-        value_converted=value_converted,
-        description=description,
-    )
-    logging.info(f"creating new transaction record: {transaction}")
+    # transaction = Transaction(
+    #     created_at=created_at,
+    #     user_id=user.id,
+    #     label=label,
+    #     value=value,
+    #     currency=currency,
+    #     value_converted=value_converted,
+    #     description=description,
+    # )
+    logging.info("creating new transaction record: %s", transaction)
 
     # Stores the record in the database.
     with Session(ENGINE) as session:
@@ -123,9 +117,8 @@ def retrieve_transactions(
                 User.organization_id == organization.id,
             )
         )
-        logging.info(f"executing sql statement: {statement}")
-        transactions = session.exec(statement)
-        transactions = [transaction for transaction in transactions]
+        logging.info("executing sql statement: %s", statement)
+        transactions = list(session.exec(statement))
 
     logging.info("successfully retrieved transactions")
 
@@ -141,16 +134,16 @@ def retrieve_user_organization(whatsapp_phone: str) -> Tuple[User, Organization]
             .where(User.organization_id == Organization.id)
             .where(User.whatsapp_phone == whatsapp_phone)
         )
-        logging.info(f"executing sql statement: {statement}")
+        logging.info("executing sql statement: %s", statement)
         results = session.exec(statement)
-        organizations = [(user, organization) for ((user, organization)) in results]
         try:
-            user, organization = organizations[0]
+            user, organization = results.one()
             logging.info("successfully retrieved user and organization")
 
         except IndexError:
             logging.error(
-                f"no user and/or organization found for whatsapp phone {whatsapp_phone}"
+                "no user and/or organization found for whatsapp phone %s",
+                whatsapp_phone,
             )
             user, organization = None, None
 
@@ -162,11 +155,11 @@ def retrieve_user(whatsapp_phone: str) -> User | None:
 
     with Session(ENGINE) as session:
         statement = select(User).where(User.whatsapp_phone == whatsapp_phone)
-        logging.info(f"executing sql statement: {statement}")
+        logging.info("executing sql statement: %s", statement)
         results = session.exec(statement)
         try:
             user = results.one()
-        except Exception:
+        except IndexError:
             user = None
 
     return user
@@ -177,7 +170,7 @@ def retrieve_organization(user: User) -> Organization:
 
     with Session(ENGINE) as session:
         statement = select(Organization).where(Organization.id == user.organization_id)
-        logging.info(f"executing sql statement: {statement}")
+        logging.info("executing sql statement: %s", statement)
         results = session.exec(statement)
         organization = results.one()
 
@@ -199,7 +192,7 @@ def record_organization(
         currency=currency,
         language=language,
     )
-    logging.info(f"creating new organization record: {organization}")
+    logging.info("creating new organization record: %s", organization)
 
     # Stores the record in the database.
     with Session(ENGINE) as session:
@@ -229,7 +222,7 @@ def record_user(
         name=name,
         is_admin=is_admin,
     )
-    logging.info(f"creating new user record: {user}")
+    logging.info("creating new user record: %s", user)
 
     # Stores the record in the database.
     with Session(ENGINE) as session:
@@ -244,7 +237,7 @@ def update_user(user: User, name: str) -> User:
 
     with Session(ENGINE) as session:
         statement = select(User).where(User.id == user.id)
-        logging.info(f"executing sql statement: {statement}")
+        logging.info("executing sql statement: %s", statement)
         results = session.exec(statement)
         user = results.one()
         user.name = name

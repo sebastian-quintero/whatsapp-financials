@@ -1,3 +1,4 @@
+"""module logger provides the configuration of the logs for the application."""
 import logging
 import sys
 import warnings

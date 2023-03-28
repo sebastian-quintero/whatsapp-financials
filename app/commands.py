@@ -1,3 +1,7 @@
+"""
+commands module holds all the commands that the application supports.
+"""
+
 import logging
 import os
 import re
@@ -28,6 +32,7 @@ from app.database import (
     retrieve_user,
     retrieve_user_organization,
     update_user,
+    Transaction as DatabaseTransaction,
 )
 from app.messages import (
     ADD_HELP_MSG,
@@ -95,7 +100,9 @@ class Command:
         flag = False if user is None or organization is None else True
         if not flag:
             logging.error(
-                f"Phone number {whatsapp_phone} is not authorized to execute command {self.regexp}"
+                "Phone number %s is not authorized to execute command %s",
+                whatsapp_phone,
+                self.regexp,
             )
 
         return flag, user, organization
@@ -109,18 +116,15 @@ class Command:
         hosted here. Depending on the logic the command executes, this function
         may return information needed for displaying the final user message.
         Should be implemented by children classes."""
-        return
 
     def message(self, organization: Organization, user: User, **kwargs) -> str:
         """Final message that is displayed to the user. Varies based on the
         language provided. A single string is returned, containing the complete
         text for the user. Should be implemented by children classes."""
-        return
 
     def help_message(self, organization: Organization) -> str | None:
         """Help text of the command. Varies based on the language provided.
         Should be implemented by children classes."""
-        return
 
 
 @dataclass
@@ -225,7 +229,7 @@ class Report(Command):
             monthly_totals_msg += f"💰 {month}\n"
             count_text = (
                 "Transactions"
-                if organization.language == Language.en
+                if organization.language == Language.EN
                 else "Transacciones"
             )
             monthly_totals_msg += f"🔢 # {count_text} = {count.get(month)}\n"
@@ -247,7 +251,7 @@ class Report(Command):
                     savings_ratio = floor((savings / debits) * 100)
                     savings_text = (
                         "\t🥂 Savings"
-                        if organization.language == Language.en
+                        if organization.language == Language.EN
                         else "\t🥂 Ahorros"
                     )
                     monthly_totals_msg += (
@@ -258,7 +262,7 @@ class Report(Command):
             # Check if there are credits.
             if financial_credits < 0:
                 expenses_text = (
-                    "🔴 Expenses" if organization.language == Language.en else "🔴 Gastos"
+                    "🔴 Expenses" if organization.language == Language.EN else "🔴 Gastos"
                 )
                 monthly_totals_msg += (
                     f"{expenses_text} = {'${:,.2f}'.format(abs(financial_credits))}\n"
@@ -327,9 +331,9 @@ class TransactionSense(IntEnum):
     which can be positive if it debits an account or negative if it credits
     it."""
 
-    positive = 1
+    POSITIVE = 1
     """Increases monetary value."""
-    negative = -1
+    NEGATIVE = -1
     """Decreases monetary value."""
 
 
@@ -408,13 +412,15 @@ class Transaction(Command):
         val = value * self.sense.value
         val_conv = value_converted * self.sense.value
         record_transaction(
-            created_at=datetime.now(pytz.timezone(os.getenv("TIMEZONE"))),
-            description=description,
-            label=self.database_label,
-            value=val,
-            currency=currency,
-            value_converted=val_conv,
-            user=user,
+            transaction=DatabaseTransaction(
+                user_id=user.id,
+                created_at=datetime.now(pytz.timezone(os.getenv("TIMEZONE"))),
+                label=self.database_label,
+                value=val,
+                currency=currency,
+                value_converted=val_conv,
+                description=description,
+            )
         )
 
         return {
@@ -464,22 +470,19 @@ class Transaction(Command):
     def label(self, language: Language) -> str:
         """Label that is shown to the user for the transaction type. Should be
         implemented by children classes."""
-        return
 
     @staticmethod
     def _convert(value: float, base_currency: str, target_currency: str) -> float:
         """convert the value to the default currency used with an external API."""
 
-        url = f"https://api.apilayer.com/fixer/latest?base={base_currency}&symbols={target_currency}"
+        url = (
+            "https://api.apilayer.com/fixer/latest?"
+            f"base={base_currency}&symbols={target_currency}"
+        )
         headers = {"apikey": os.getenv("FIXER_API_KEY")}
-        try:
-            response = get(url=url, headers=headers)
-            data = response.json()
-            rate = data.get("rates").get(target_currency)
-
-        except Exception as ex:
-            logging.exception(f"error trying to get currency conversion: {ex}")
-            rate = 4700
+        response = get(url=url, headers=headers, timeout=5)
+        data = response.json()
+        rate = data.get("rates", {}).get(target_currency, 4700)
 
         return value * rate
 
@@ -490,14 +493,14 @@ class Essential(Transaction):
 
     database_label: str = "Essential"
     user_label: str = "ess"
-    sense: TransactionSense = TransactionSense.negative
+    sense: TransactionSense = TransactionSense.NEGATIVE
     emoji: str = "🌽"
 
     def __init__(self):
         super().__init__()
 
     def label(self, language: Language) -> str:
-        return self.database_label if language == Language.en else "Esencial"
+        return self.database_label if language == Language.EN else "Esencial"
 
 
 @dataclass
@@ -506,14 +509,14 @@ class NonEssential(Transaction):
 
     database_label: str = "Non essential"
     user_label: str = "non"
-    sense: TransactionSense = TransactionSense.negative
+    sense: TransactionSense = TransactionSense.NEGATIVE
     emoji: str = "🍔"
 
     def __init__(self):
         super().__init__()
 
     def label(self, language: Language) -> str:
-        return self.database_label if language == Language.en else "No esencial"
+        return self.database_label if language == Language.EN else "No esencial"
 
 
 @dataclass
@@ -522,14 +525,14 @@ class Income(Transaction):
 
     database_label: str = "Income"
     user_label: str = "inc"
-    sense: TransactionSense = TransactionSense.positive
+    sense: TransactionSense = TransactionSense.POSITIVE
     emoji: str = "💸"
 
     def __init__(self):
         super().__init__()
 
     def label(self, language: Language) -> str:
-        return self.database_label if language == Language.en else "Ingreso"
+        return self.database_label if language == Language.EN else "Ingreso"
 
 
 @dataclass
@@ -758,23 +761,18 @@ class Add(Command):
         """Send a message to the given phone number notifying them that they
         have been added to an organization."""
 
-        try:
-            message = TWILIO_CLIENT.messages.create(
-                from_=os.getenv("TWILIO_PHONE"),
-                body=USER_WELCOME_MSG.to_str(
-                    organization.language,
-                    val_1=organization.name,
-                    val_2=organization.language,
-                    val_3=organization.currency,
-                    val_4=user.whatsapp_phone,
-                ),
-                to=f"whatsapp:{phone_number}",
-            )
-            return message
-
-        except Exception as ex:
-            logging.exception(f"could not send message: {ex}")
-            return None
+        message = TWILIO_CLIENT.messages.create(
+            from_=os.getenv("TWILIO_PHONE"),
+            body=USER_WELCOME_MSG.to_str(
+                organization.language,
+                val_1=organization.name,
+                val_2=organization.language,
+                val_3=organization.currency,
+                val_4=user.whatsapp_phone,
+            ),
+            to=f"whatsapp:{phone_number}",
+        )
+        return message
 
 
 # Instantiate the supported commands once because they contain static
