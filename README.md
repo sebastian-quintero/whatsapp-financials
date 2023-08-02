@@ -135,18 +135,18 @@ Note that the sender in the `From` param must be authorized in the
 Build the image.
 
 ```bash
-docker build -t expense-tracker .
+docker build -t whatsapp-financials .
 ```
 
 Run a container using the image. Do not forget to have the environment
 variables set in the `.env` file.
 
 ```bash
-docker run -d --name expense-tracker -p 80:8000 --env-file .env --rm expense-tracker
+docker run -d --name whatsapp-financials -p 80:8000 --env-file .env --rm whatsapp-financials
 ```
 
 Now you can make all the same requests that were described in the previous
 section, but to port `80`.
 
-You can see the logs of your container with `docker logs expense-tracker` or
+You can see the logs of your container with `docker logs whatsapp-financials` or
 follow them adding the `-f` flag before the container name.
